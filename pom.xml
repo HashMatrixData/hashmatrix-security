@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!--
+    公共依赖经 Maven 坐标接入（GitHub Packages），不依赖 submodule 路径：
+    relativePath 留空 → 从制品仓解析。只 clone 本仓即可构建（前提是能访问制品仓）。
+  -->
+  <parent>
+    <groupId>io.hashmatrix</groupId>
+    <artifactId>hashmatrix-platform-parent</artifactId>
+    <version>0.2.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>io.hashmatrix.security</groupId>
+  <artifactId>hashmatrix-security</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>hashmatrix-security</name>
+  <description>
+    数据安全分系统工程基座：Spring Boot 分层骨架（api/app/domain/infra）+ 多租户上下文路由
+    + 网关预认证授权（starter-security）+ Flowable 审批工作流接线 + PostgreSQL 连通接线。
+    分类分级/标签/审批/审计/资源监控的落地基座，本仓只打通基础设施与授权链，不实现安全业务。
+  </description>
+
+  <properties>
+    <!--
+      spring-boot-maven-plugin 版本须与 BOM 的 Spring Boot 线一致；BOM(import) 不透出 plugin
+      管理，故在此显式对齐 3.3.x（后续可上提到 platform-parent 统一治理）。
+    -->
+    <spring-boot.version>3.3.5</spring-boot.version>
+    <!--
+      Flowable 工作流引擎版本：未纳入平台 BOM（非全平台公共依赖，仅本仓审批用），故在此显式钉死。
+      7.1.x 对齐 Spring Boot 3.3 线；升级时与 spring-boot.version 同步校验兼容。
+    -->
+    <flowable.version>7.1.0</flowable.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.hashmatrix</groupId>
+        <artifactId>hashmatrix-bom</artifactId>
+        <version>0.2.0</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!--
+    公共依赖制品仓（GitHub Packages）：让「只 clone 本仓」即可解析 io.hashmatrix 制品。
+    需在 ~/.m2/settings.xml（或 CI setup-java）为 server id=github 提供凭据（GITHUB_TOKEN，packages:read）。
+    本地若已 `mvn install` 过 libs-java，则 .m2 缓存优先，无需联网。
+  -->
+  <repositories>
+    <repository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/HashMatrixData/hashmatrix</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>github</id>
+      <url>https://maven.pkg.github.com/HashMatrixData/hashmatrix</url>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <dependencies>
+    <!-- Web 基座 + 平台统一返回/异常/授权/审计/可观测/多租户（版本由 BOM 钉死） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-tenant</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-web</artifactId>
+    </dependency>
+    <!-- 授权与管控：信任网关下发的身份/角色头，开启方法级授权（本仓核心职责） -->
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-security</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-audit</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-observability</artifactId>
+    </dependency>
+
+    <!-- 审批工作流：Flowable BPMN 引擎（仅接线 + 本地可起，不建业务流程定义） -->
+    <dependency>
+      <groupId>org.flowable</groupId>
+      <artifactId>flowable-spring-boot-starter-process</artifactId>
+      <version>${flowable.version}</version>
+    </dependency>
+
+    <!-- 业务库：PostgreSQL（仅打通连通，不建业务表） -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
+    <!-- 测试：统一测试栈（JUnit5/AssertJ/Mockito/Testcontainers + 脱敏 fixtures） -->
+    <dependency>
+      <groupId>io.hashmatrix</groupId>
+      <artifactId>hashmatrix-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- 可执行 fat-jar，供 Dockerfile 多阶段构建运行期镜像 -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <version>${spring-boot.version}</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- 集成切片 *IT 走 failsafe（verify 阶段）；mvn package 不触发，无需 Docker -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
