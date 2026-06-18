@@ -1,0 +1,46 @@
+# 数据安全分系统 — 默认配置（所有连接参数均 env 可覆盖；不含真实主机/凭据，红线合规）
+spring:
+  application:
+    name: security
+  datasource:
+    url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:security}
+    username: ${PG_USER:security}
+    password: ${PG_PASSWORD:security}
+  sql:
+    init:
+      mode: never          # 基座不建业务表（分级/标签/审批表由业务落地）
+
+# 审批工作流引擎（Flowable）：仅接线 + 本地可起，不部署业务流程定义
+flowable:
+  # 由引擎在业务库内自建/升级 ACT_* 表结构（基座/本地/IT 连通用）。
+  # 🔴 生产 profile 须覆写为 false，ACT_* 表结构走迁移脚本治理（见 deploy/charts/security 待落地清单），
+  #    避免运行期自动改 schema。
+  database-schema-update: true
+  # 基座无 processes/*.bpmn，关闭启动期自动部署扫描
+  check-process-definitions: false
+  # 基座不跑异步作业执行器（无业务流程实例），降低启动开销
+  async-executor-activate: false
+
+# 健康检查 / 可观测：复用 starter-observability（actuator + /actuator/prometheus）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+
+# 平台公共能力开关（libs-java starter）
+hashmatrix:
+  # 授权与管控：信任网关下发身份/角色头，开启方法级授权（探针/指标放行，业务 API 需认证）
+  security:
+    enabled: true
+  observability:
+    service-name: security
+    common-tags:
+      subsystem: security
+  audit:
+    enabled: true

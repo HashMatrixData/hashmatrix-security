@@ -38,6 +38,22 @@
 
 > 全局定义见主仓 `docs/00-主仓初始化-spec.md` 与 `docs/architecture/05-多租户与控制平面.md`。
 
+## 🔗 契约（Contracts）—— 跨子系统集成
+
+本项目经**契约**与其它子系统集成。契约的**单一事实源在主仓** `HashMatrixData/hashmatrix` 的 `contracts/`：
+- 索引（机器可读）`contracts/registry.yaml` · 规范 `contracts/CONVENTIONS.md` · 设计 `docs/architecture/06-契约治理.md`
+- 在线：https://github.com/HashMatrixData/hashmatrix/tree/main/contracts
+
+**铁律**：先改契约、再改实现；加法兼容默认放行，破坏性走 MAJOR + 弃用期双跑 + 通知消费方；消费方一律 tolerant reader。
+
+**本仓契约**：
+- producer：暂无
+- consumer：`icd/tenant-context-headers`、`icd/governance-metadata`
+
+**如何查阅（随时拉最新，勿存本地副本）**：
+- 在 superproject（`hashmatrix/services/<本仓>`）下：直接读 `../../contracts/`。
+- 独立 clone：WebFetch `https://raw.githubusercontent.com/HashMatrixData/hashmatrix/main/contracts/registry.yaml`（公开仓免鉴权）→ 按 registry 取对应契约；或 `gh api repos/HashMatrixData/hashmatrix/contents/contracts/<path> -H "Accept: application/vnd.github.raw"`。
+
 ## 仓库定位
 
 数据安全分系统：分类分级、标签规则、工作流审批、安全审计、资源监控。
