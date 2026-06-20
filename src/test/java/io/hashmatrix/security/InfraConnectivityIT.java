@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -26,6 +27,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
+// 默认配置将管理端口独立为 9083（运行期 K8s 探针/Prometheus 走独立端口）。但 MOCK web env 下，
+// 独立管理端口会把 actuator 端点搬到一个 MockMvc 触达不到的管理子上下文（→ /actuator/** 404/401）。
+// 此处把管理端口对齐业务端口，使 actuator 回到主 mock 上下文，可经 MockMvc 验证；真实双端口绑定
+// （8083/9083 各自监听）留待末端 #4 的真实端口 E2E 覆盖。
+@TestPropertySource(properties = "management.server.port=${server.port}")
 class InfraConnectivityIT {
 
     /** 网关已完成 OIDC 校验后下发的身份头占位（脱敏，红线合规）。 */
@@ -106,6 +112,15 @@ class InfraConnectivityIT {
     void actuatorHealthIsUpAndPermittedWithoutAuth() throws Exception {
         // 探针放行（permitPaths），无需网关身份即可被 K8s/Prometheus 采集
         mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void readinessProbeIsUpAndDepsOptional() throws Exception {
+        // readiness 组 curated 为 readinessState：外部依赖（PG/Flowable）不硬门 readiness（deps-optional 绿），
+        // 单 namespace 内依赖未就绪不应使 Pod 被摘流量。真实「依赖宕机仍绿」的双端口验证留待末端 #4 的 E2E。
+        mvc.perform(get("/actuator/health/readiness"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
     }
