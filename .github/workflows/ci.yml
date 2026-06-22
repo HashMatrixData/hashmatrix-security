@@ -7,11 +7,14 @@ on:
 
 permissions:
   contents: read
-  packages: read   # 解析 GitHub Packages 上的 io.hashmatrix 公共依赖
+  packages: write   # read：解析 GitHub Packages 上的 io.hashmatrix 公共依赖；write：推送镜像到 ghcr（仅 main push 时用）
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # 镜像 ref 单点定义（owner 全小写）；owner/repo 命名调整时只改这一处。
+      IMAGE: ghcr.io/hashmatrixdata/security
     steps:
       - uses: actions/checkout@v4
 
@@ -73,9 +76,41 @@ jobs:
       - name: Build + test (unit + integration)
         run: mvn -B -ntp clean verify
 
+      # 镜像 tag = pom <version>（语义版本），与 jar 制品版本对齐；主仓 Helm chart 据此拉取。
+      - name: 解析镜像版本（pom <version>）
+        id: imgver
+        run: |
+          # forceStdout 可能被插件下载/告警行污染：取末行 + 去空白，再按语义版本校验，
+          # 避免脏值进入 image tag 造成 docker build 的「晚失败」难排查。
+          VERSION=$(mvn -B -ntp -q help:evaluate -Dexpression=project.version -DforceStdout 2>/dev/null | tail -n1 | tr -d '[:space:]')
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::解析到的 pom <version> 非语义版本：'$VERSION'"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "镜像版本：$VERSION"
+
+      # 三 tag：:<semver>（与 pom 对齐，便于 Helm 引用）、:sha-<gitsha>（每次 main 构建的不可变可追溯制品）、
+      # :latest（滚动）。注：release 纪律落地前（主仓 Discussion #28）pom version 固定为 0.1.0，
+      # :<semver> 与 :latest 会被多次 main push 覆盖、非不可变；要 pin 不可变制品请用 :sha-<gitsha>。
       - name: 镜像构建（多阶段，BuildKit secret 注入同一 settings.xml，不落镜像层）
         env:
           DOCKER_BUILDKIT: "1"
         run: |
           docker build --secret id=maven_settings,src="$HOME/.m2/settings.xml" \
-            -t hashmatrix-security:ci .
+            -t "$IMAGE:${{ steps.imgver.outputs.version }}" \
+            -t "$IMAGE:sha-${{ github.sha }}" \
+            -t "$IMAGE:latest" .
+
+      # 仅 main 分支 push 才登录并推送：PR / fork 只构建校验 Dockerfile（fork 的 GITHUB_TOKEN 只读，
+      # 且不应为每个 PR 发布镜像）。镜像供主仓 Helm chart 拉入单 namespace（D5：子仓交付 image，主仓 owns charts）。
+      - name: 登录并推送镜像到 ghcr（仅 main push）
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+          docker push "$IMAGE:${{ steps.imgver.outputs.version }}"
+          docker push "$IMAGE:sha-${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          docker logout ghcr.io
