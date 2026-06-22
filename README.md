@@ -59,9 +59,10 @@ mvn -B verify
 # 3) 本地起栈 + 运行，验证健康检查
 docker compose -f docker-compose.local.yml up -d
 bash scripts/run-local.sh          # 或 mvn spring-boot:run -Dspring-boot.run.profiles=local
-curl -s localhost:8080/actuator/health
+# actuator 走独立管理端口 9083（业务端口 8083）：
+curl -s localhost:9083/actuator/health
 # 业务 API 需网关下发身份（应用不二次校验 token）：
-curl -s localhost:8080/api/security/probe -H 'X-User: svc-probe' -H 'X-Tenant-Id: tenant-demo'
+curl -s localhost:8083/api/security/probe -H 'X-User: svc-probe' -H 'X-Tenant-Id: tenant-demo'
 ```
 
 > 公共依赖在 GitHub Packages，首次构建需配 `~/.m2/settings.xml`（`server id=github` + `read:packages` PAT）。

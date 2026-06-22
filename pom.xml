@@ -11,7 +11,7 @@
   <parent>
     <groupId>io.hashmatrix</groupId>
     <artifactId>hashmatrix-platform-parent</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1</version>
     <relativePath/>
   </parent>
 
@@ -45,7 +45,7 @@
       <dependency>
         <groupId>io.hashmatrix</groupId>
         <artifactId>hashmatrix-bom</artifactId>
-        <version>0.2.0</version>
+        <version>0.2.1</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -142,6 +142,13 @@
             <goals>
               <goal>repackage</goal>
             </goals>
+            <configuration>
+              <!-- 可执行 fat-jar 用 exec 分类器输出（hashmatrix-security-<ver>-exec.jar），保留瘦 jar 为主制品。
+                   否则 repackage 会替换主制品为 fat-jar，failsafe 集成切片（verify 阶段）类路径扫描读不到
+                   @SpringBootConfiguration（类落在 BOOT-INF/classes 下）→「Unable to find @SpringBootConfiguration」。
+                   Dockerfile 运行期改 COPY *-exec.jar。 -->
+              <classifier>exec</classifier>
+            </configuration>
           </execution>
         </executions>
       </plugin>

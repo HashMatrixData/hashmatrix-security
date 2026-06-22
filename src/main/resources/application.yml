@@ -1,4 +1,9 @@
 # 数据安全分系统 — 默认配置（所有连接参数均 env 可覆盖；不含真实主机/凭据，红线合规）
+
+# 服务端口：业务端口（平台基线 security=8083，env 可覆盖；管理端口在 management.server 独立）
+server:
+  port: ${SERVER_PORT:8083}
+
 spring:
   application:
     name: security
@@ -23,6 +28,10 @@ flowable:
 
 # 健康检查 / 可观测：复用 starter-observability（actuator + /actuator/prometheus）
 management:
+  # 管理/actuator 端口独立于业务端口（平台基线 security=9083，env 可覆盖）——
+  # K8s 探针/Prometheus 采集走此端口，与业务流量隔离。
+  server:
+    port: ${MANAGEMENT_SERVER_PORT:9083}
   endpoints:
     web:
       exposure:
@@ -32,12 +41,29 @@ management:
       probes:
         enabled: true
       show-details: always
+      # 探针分组（curated）：
+      # - readiness 仅含 readinessState——外部依赖（PG/Flowable）不硬门 readiness（deps-optional 绿），
+      #   单 namespace 内依赖未就绪不应使 Pod 被摘流量；依赖健康仍在 /actuator/health 完整可见。
+      # - liveness 仅含 livenessState——存活与依赖无关，避免依赖抖动触发误重启。
+      group:
+        readiness:
+          include: readinessState
+        liveness:
+          include: livenessState
 
 # 平台公共能力开关（libs-java starter）
 hashmatrix:
   # 授权与管控：信任网关下发身份/角色头，开启方法级授权（探针/指标放行，业务 API 需认证）
   security:
     enabled: true
+    # 免认证放行路径（探针/指标，供 K8s/Prometheus 采集）。starter-security 默认仅放行
+    # /actuator/health 精确路径，未覆盖 readiness/liveness 探针子路径；此处补 /actuator/health/**
+    # 使 K8s 就绪/存活探针免认证可达（覆盖默认值需重列默认项）。
+    permit-paths:
+      - /actuator/health
+      - /actuator/health/**
+      - /actuator/info
+      - /actuator/prometheus
   observability:
     service-name: security
     common-tags:

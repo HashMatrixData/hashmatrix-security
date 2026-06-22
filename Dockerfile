@@ -19,7 +19,9 @@ FROM eclipse-temurin:17-jre-alpine AS run
 WORKDIR /app
 # 非 root 运行
 RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /workspace/target/hashmatrix-security-*.jar app.jar
+# 取 exec 分类器的可执行 fat-jar（瘦 jar 为主制品，见 pom 的 repackage classifier 注释）
+COPY --from=build /workspace/target/hashmatrix-security-*-exec.jar app.jar
 USER app
-EXPOSE 8080
+# 业务端口 8083 / 管理(actuator)端口 9083（平台基线，可经 SERVER_PORT/MANAGEMENT_SERVER_PORT 覆盖）
+EXPOSE 8083 9083
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
