@@ -56,14 +56,8 @@ hashmatrix:
   # 授权与管控：信任网关下发身份/角色头，开启方法级授权（探针/指标放行，业务 API 需认证）
   security:
     enabled: true
-    # 免认证放行路径（探针/指标，供 K8s/Prometheus 采集）。starter-security 默认仅放行
-    # /actuator/health 精确路径，未覆盖 readiness/liveness 探针子路径；此处补 /actuator/health/**
-    # 使 K8s 就绪/存活探针免认证可达（覆盖默认值需重列默认项）。
-    permit-paths:
-      - /actuator/health
-      - /actuator/health/**
-      - /actuator/info
-      - /actuator/prometheus
+    # permit-paths 采用 starter-security 默认值（已含 /actuator/health/** 覆盖探针子路径，hashmatrix#26）；
+    # 原本地 workaround 在根因修复后冗余，已移除。
   observability:
     service-name: security
     common-tags:
